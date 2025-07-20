@@ -114,7 +114,7 @@ def enable_fall_check():
 # spawn_structures()
 
 apartment = Entity(
-    model='assets/models/house.blend',
+    model='assets/models/apartment.glb',
     collider='mesh',
     scale=0.1,
     position=(100, 0.5, 0)
