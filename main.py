@@ -27,14 +27,19 @@ window.color = color.black
 window.fps_counter.enabled = True
 window.exit_button.visible = False
 
+
+is_first_person = True
+pitch, yaw = 0, 0
+max_pitch = 89
+
 Sky()
 
 # === TERRAIN ===
 ground = Entity(
     model='cube',
     scale=(9980, 1, 9981),
-    texture='grass2',
-    texture_scale=(1920, 1080),
+    texture='grass3',
+    texture_scale=(1690, 2160),
     collider='box',
     position=(0, 0, 0),
     # color=color.green
@@ -45,6 +50,7 @@ DirectionalLight(y=3, z=3, shadows=True)
 # === PLAYER ===
 player = Entity(model='cube', scale_y=1.8, origin_y=-0.5, collider='box', position=(0, 10, 0))
 player.visible = False
+player.model = 'assets/models/player.glb'
 
 # TEMP ENTITY
 # Entity(model='cube', color=color.red, position=(0, 0.5, 0), scale=0.5)
@@ -115,10 +121,21 @@ def enable_fall_check():
 
 apartment = Entity(
     model='assets/models/apartment.glb',
-    collider='mesh',
-    scale=0.1,
-    position=(100, 0.5, 0)
+    collider='box',
+    scale=0.05,
+    position=(100, -0.9, 0)
 )
+
+def input(key):
+    global is_first_person
+    if key == 'c':
+        is_first_person = not is_first_person
+    if key == 'escape':
+        mouse.locked = False
+    if key == 'left mouse down':
+        mouse.locked = True
+
+
 
 # === UPDATE ===
 def update():
@@ -137,6 +154,11 @@ def update():
         camera.rotation_x = pitch
         player.rotation_y = yaw
         camera.rotation_y = yaw
+
+    if mouse.locked:
+        yaw += mouse.velocity[0] * sensitivity
+        pitch -= mouse.velocity[1] * sensitivity
+        pitch = clamp(pitch, -max_pitch, max_pitch)
 
     # Reset roll and update camera position every frame
     camera.rotation_z = 0
@@ -178,6 +200,68 @@ def update():
         is_grounded = True
     else:
         is_grounded = False
+
+    # === PERSPECTIVE CHANGE LOGIC ===
+
+    # === First-person view ===
+    if is_first_person:
+        player.visible = False
+        if player.model != 'cube':
+            player.model = 'cube'
+            player.scale = Vec3(1, 10, 1)
+
+        camera.position = player.position + Vec3(0, eye_height, 0)
+        camera.rotation_x = pitch
+        camera.rotation_y = yaw
+        camera.rotation_z = 0
+
+    # === Third-person view ===
+    else:
+        player.visible = True
+        if player.model != 'assets/models/player.glb':
+            player.model = 'assets/models/char.obj'
+            player.scale = 0.005
+
+        # Camera offset (behind and above player)
+        behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
+        height = Vec3(0, 3, 0)
+        camera.position = player.position + behind + height
+        # Third-person camera placement and rotation
+        player.visible = True
+
+        if player.model != 'assets/models/player.glb':
+            player.model = 'assets/models/char.obj'
+            player.scale = 0.005
+        
+        # Position camera behind and above the player
+        behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
+        height = Vec3(0, 2, 0)
+        camera.position = player.position + behind + height
+
+        # Set camera rotation using pitch and yaw (manual view control)
+        camera.rotation_x = pitch
+        camera.rotation_y = yaw
+        camera.rotation_z = 0
+
+
+    # === MODEL CHANGE LOGIC ===
+    if is_first_person:
+        camera.position = player.position + Vec3(0, eye_height, 0)
+        camera.rotation_x = pitch
+        camera.rotation_y = yaw
+        player.visible = False
+        if player.model != 'cube':
+            player.model = 'cube'
+            player.scale = Vec3(1, 1.8, 1)  # Default cube size
+    else:
+        offset = Vec3(sin(radians(yaw)), 0.5, cos(radians(yaw))) * -6
+        camera.position = player.position + offset + Vec3(0, 2, 0)
+        camera.look_at(player.position + Vec3(0, 1, 0))
+        player.visible = True
+        if player.model != 'assets/models/player.glb':
+            player.model = 'assets/models/char.obj'
+            player.scale = 0.005  # <-- Set this to scale the model down properly
+
 
     # === Point Pickup Collection ===
     for pickup in point_pickups[:]:
