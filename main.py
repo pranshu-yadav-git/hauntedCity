@@ -1,6 +1,7 @@
 from ursina import *
 from math import sin, cos, radians
 from random import uniform
+from ursina import lerp
 
 app = Ursina()
 
@@ -39,6 +40,30 @@ crouch_height = 0.9
 stand_height = 1.8
 is_crouching = False
 
+held_left = None
+held_right = None
+pickup_distance = 2.0  # max distance to grab object
+
+bobbing_time = 0
+base_eye_height = 1.8
+
+
+
+# ==== CROSSHAIR ====
+# crosshair = Entity(
+#     model='circle',
+#     scale=0.005,
+#     color=color.white,
+#     position=(0, 0, 0),
+#     parent=camera.ui
+# )
+
+# crosshair = Entity(parent=camera.ui, model='quad', scale=(0.002, 0.0002), color=color.white, position=(0, 0))
+# crosshair2 = Entity(parent=camera.ui, model='quad', scale=(0.0002, 0.002), color=color.white, position=(0, 0))
+
+crosshair = Entity(parent=camera.ui, model='quad', texture='crosshairg.png', scale=0.003)
+
+
 Sky()
 
 # === TERRAIN ===
@@ -56,8 +81,9 @@ DirectionalLight(y=3, z=3, shadows=True)
 
 # === PLAYER ===
 player = Entity(model='cube', scale_y=1.8, origin_y=-0.5, collider='box', position=(0, 10, 0))
+player.collider = BoxCollider(player, center=Vec3(0,1,0), size=Vec3(1,2,1))
 player.visible = False
-player.model = 'assets/models/player.glb'
+# player.model = 'assets/models/player.glb'
 
 # TEMP ENTITY
 # Entity(model='cube', color=color.red, position=(0, 0.5, 0), scale=0.5)
@@ -133,20 +159,111 @@ apartment = Entity(
     position=(100, -0.9, 0)
 )
 
-# def input(key):
-#     global is_first_person
-#     if key == 'c':
-#         is_first_person = not is_first_person
-#     if key == 'escape':
-#         mouse.locked = False
-#     if key == 'left mouse down':
-#         mouse.locked = True
+def input(key):
+    global held_left, held_right
+
+    # Pick up object
+    if key == 'e':
+        nearest = None
+        nearest_dist = float('inf')
+
+        for obj in scene.entities:
+            if hasattr(obj, 'is_holdable') and obj.is_holdable and obj.enabled:
+                dist = distance(player.position, obj.position)
+                if dist < pickup_distance and dist < nearest_dist:
+                    nearest = obj
+                    nearest_dist = dist
+
+        if nearest:
+            if not held_right:
+                held_right = nearest
+                nearest.parent = camera
+                nearest.world_position = player.world_position + Vec3(0.3, 0, 1)
+                nearest.scale = 0.3
+            elif not held_left:
+                held_left = nearest
+                nearest.parent = camera
+                nearest.world_position = player.world_position + Vec3(-0.3, 0, 1)
+                nearest.scale = 0.3
+
+    # Drop / Throw object
+    if key == 'q':
+        thrown = None
+
+        if held_right:
+            thrown = held_right
+            held_right = None
+        elif held_left:
+            thrown = held_left
+            held_left = None
+
+        if thrown:
+            thrown.parent = scene
+            thrown.scale = 0.5
+
+            start_pos = player.world_position + Vec3(0, 1.5, 0)
+            forward = camera.forward.normalized()
+
+            # Raycast forward first
+            forward_hit = raycast(start_pos, forward, distance=15, ignore=[player], debug=True)
+
+            if forward_hit.hit:
+                target_point = forward_hit.point
+            else:
+                # Try downward ray from forward offset
+                mid = start_pos + forward * 4
+                down_hit = raycast(mid, Vec3(0, -1, 0), distance=20, ignore=[player], debug=True)
+
+                if down_hit.hit:
+                    target_point = down_hit.point
+                else:
+                    # Final fallback
+                    target_point = start_pos + forward * 4 + Vec3(0, -1, 0)
+
+            # Offset slightly to prevent merging/sticking
+            target_point += Vec3(0, 0.2, 0)
+            target_point += Vec3(random.uniform(-0.05, 0.05), 0, random.uniform(-0.05, 0.05))
+
+            thrown.world_position = start_pos
+            thrown.gravity = 0
+            thrown.collider = None
+
+            def enable_gravity():
+                thrown.gravity = 1
+                thrown.collider = 'box'
+
+            thrown.animate_position(target_point, duration=0.35, curve=curve.out_circ)
+            invoke(enable_gravity, delay=0.35)
+
+
+
+
+
+
+
+class HoldableItem(Entity):
+    def __init__(self, position=(0, 1, 0), model='cube', color=color.azure):
+        super().__init__(
+            model=model,
+            color=color,
+            scale=0.5,
+            position=position,
+            collider='box'
+        )
+        self.is_holdable = True
+
+# Temporary holdable test objects
+holdable_items = []
+
+holdable_items.append(HoldableItem(position=(2, 1, 2), color=color.orange))
+holdable_items.append(HoldableItem(position=(-2, 1, -2), color=color.yellow))
+holdable_items.append(HoldableItem(position=(0, 1, 4), color=color.cyan))
 
 
 
 # === UPDATE ===
 def update():
-    global pitch, yaw, velocity_y, is_grounded, player_points, game_over, eye_height, target_eye_height, target_scale_y
+    global pitch, yaw, velocity_y, is_grounded, player_points, game_over, eye_height, target_eye_height, target_scale_y, bobbing_time, x_bob, y_bob
 
     if game_over:
         return
@@ -292,6 +409,48 @@ def update():
     # Interpolate current values towards target values (smoothing)
     player.scale_y = lerp(player.scale_y, target_scale_y, 6 * time.dt)
     eye_height = lerp(eye_height, target_eye_height, 6 * time.dt)
+
+    if held_right:
+        base_pos = camera.world_position + camera.forward + camera.right * 0.4 + Vec3(0, -0.2, 0)
+        bob = Vec3(x_bob * 0.5, y_bob * 0.7, 0)  # match camera bob gently
+        held_right.world_position = lerp(held_right.world_position, base_pos + bob, 10 * time.dt)
+
+    if held_left:
+        base_pos = camera.world_position + camera.forward - camera.right * 0.4 + Vec3(0, -0.2, 0)
+        bob = Vec3(x_bob * 0.5, y_bob * 0.7, 0)
+        held_left.world_position = lerp(held_left.world_position, base_pos + bob, 10 * time.dt)
+
+
+
+
+    # Highlight holdable under crosshair
+    hovered_holdable = None
+    ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
+
+    if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
+        hovered_holdable = ray.entity
+
+    # Add/remove outline effect
+    for e in scene.entities:
+        if hasattr(e, 'is_holdable'):
+            e.highlight_color = color.lime if e == hovered_holdable else color.clear
+
+    is_moving = held_keys['w'] or held_keys['a'] or held_keys['s'] or held_keys['d']
+
+    if is_moving and is_grounded:
+        bobbing_time += time.dt * 6  # slower for smoothness
+        y_bob = math.sin(bobbing_time) * 0.035
+        x_bob = math.sin(bobbing_time * 2) * 0.02
+    else:
+        bobbing_time = 0
+        y_bob = 0
+        x_bob = 0
+
+    # Final camera position
+    camera.position = player.position + Vec3(x_bob, eye_height + y_bob, 0)
+
+
+
 
     # print("Terrain enabled:", ground.enabled, "visible:", ground.visible)
 
