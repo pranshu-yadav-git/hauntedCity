@@ -3,8 +3,10 @@ from math import sin, cos, radians
 from random import uniform
 
 app = Ursina()
-# Ambrish Addition
+
 # === CONFIG ===
+target_eye_height = 1.8
+target_scale_y = 1.8
 normal_speed = 5
 sprint_speed = 10
 sensitivity = 100  # Mouse sensitivity; adjust if unintended drift occurs
@@ -31,6 +33,11 @@ window.exit_button.visible = False
 is_first_person = True
 pitch, yaw = 0, 0
 max_pitch = 89
+
+
+crouch_height = 0.9
+stand_height = 1.8
+is_crouching = False
 
 Sky()
 
@@ -126,20 +133,20 @@ apartment = Entity(
     position=(100, -0.9, 0)
 )
 
-def input(key):
-    global is_first_person
-    if key == 'c':
-        is_first_person = not is_first_person
-    if key == 'escape':
-        mouse.locked = False
-    if key == 'left mouse down':
-        mouse.locked = True
+# def input(key):
+#     global is_first_person
+#     if key == 'c':
+#         is_first_person = not is_first_person
+#     if key == 'escape':
+#         mouse.locked = False
+#     if key == 'left mouse down':
+#         mouse.locked = True
 
 
 
 # === UPDATE ===
 def update():
-    global pitch, yaw, velocity_y, is_grounded, player_points, game_over
+    global pitch, yaw, velocity_y, is_grounded, player_points, game_over, eye_height, target_eye_height, target_scale_y
 
     if game_over:
         return
@@ -204,34 +211,34 @@ def update():
     # === PERSPECTIVE CHANGE LOGIC ===
 
     # === First-person view ===
-    if is_first_person:
-        player.visible = False
-        if player.model != 'cube':
-            player.model = 'cube'
-            player.scale = Vec3(1, 10, 1)
+    # if is_first_person:
+    #     player.visible = False
+    #     if player.model != 'cube':
+    #         player.model = 'cube'
+    #         player.scale = Vec3(1, 10, 1)
 
-        camera.position = player.position + Vec3(0, eye_height, 0)
-        camera.rotation_x = pitch
-        camera.rotation_y = yaw
-        camera.rotation_z = 0
+    #     camera.position = player.position + Vec3(0, eye_height, 0)
+    #     camera.rotation_x = pitch
+    #     camera.rotation_y = yaw
+    #     camera.rotation_z = 0
 
-    # === Third-person view ===
-    else:
-        player.visible = True
-        if player.model != 'assets/models/player.glb':
-            player.model = 'assets/models/char.obj'
-            player.scale = 0.005
+    # # === Third-person view ===
+    # else:
+    #     player.visible = True
+    #     if player.model != 'assets/models/player.glb':
+    #         player.model = 'assets/models/char.obj'
+    #         player.scale = 0.005
 
-        # Camera offset (behind and above player)
-        behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
-        height = Vec3(0, 3, 0)
-        camera.position = player.position + behind + height
-        # Third-person camera placement and rotation
-        player.visible = True
+    #     # Camera offset (behind and above player)
+    #     behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
+    #     height = Vec3(0, 3, 0)
+    #     camera.position = player.position + behind + height
+    #     # Third-person camera placement and rotation
+    #     player.visible = True
 
-        if player.model != 'assets/models/player.glb':
-            player.model = 'assets/models/char.obj'
-            player.scale = 0.005
+    #     if player.model != 'assets/models/player.glb':
+    #         player.model = 'assets/models/char.obj'
+    #         player.scale = 0.005
         
         # Position camera behind and above the player
         behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
@@ -270,6 +277,21 @@ def update():
             points_text.text = f'Points: {player_points}'
             pickup.disable()
             point_pickups.remove(pickup)
+
+    global is_crouching
+
+    # Smooth crouch control
+    if held_keys['left control']:
+        target_scale_y = crouch_height
+        target_eye_height = 0.9
+    else: 
+        target_scale_y = stand_height
+        target_eye_height = 1.8
+
+    
+    # Interpolate current values towards target values (smoothing)
+    player.scale_y = lerp(player.scale_y, target_scale_y, 6 * time.dt)
+    eye_height = lerp(eye_height, target_eye_height, 6 * time.dt)
 
     # print("Terrain enabled:", ground.enabled, "visible:", ground.visible)
 

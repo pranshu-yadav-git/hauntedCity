@@ -1,5 +1,7 @@
 from ursina import *
 
+heart_icons = []
+
 death_text = Text("You Died!", origin=(0,0), scale=2, color=color.red, enabled=False)
 
 class Player(Entity):
@@ -29,9 +31,8 @@ class Player(Entity):
 
     def update(self):
         if not self.alive:
-            return  # Stop movement or updates after death
+            return
 
-        # Player movement code...
         self.camera_target.world_position = self.world_position + Vec3(0, 10, -20)
         camera.position = lerp(camera.position, self.camera_target.world_position, time.dt * 5)
         camera.look_at(self)
@@ -40,24 +41,36 @@ class Player(Entity):
         strafe = held_keys['d'] - held_keys['a']
         self.position += (self.forward * move + self.right * strafe) * time.dt * self.speed
 
-        # World border
         self.x = clamp(self.x, -25, 25)
         self.z = clamp(self.z, -25, 25)
         self.position += self.knockback_force * time.dt
-        self.knockback_force *= 0.9  # Dampen knockback gradually
-        
-        self.position += self.knockback_force * time.dt
         self.knockback_force *= 0.9
 
-        # Invincibility wears off after 3 seconds
         if self.invincible and time.time() - self.invincibility_timer > 3:
             self.invincible = False
             print("Player is vulnerable again.")
-        
+
+    def setup_hearts(self):
+        for i in range(7):
+            heart = Entity(
+                parent=camera.ui,
+                model='quad',
+                texture='assets/ui/heart_full.png',
+                scale=0.07,
+                position=Vec2(-0.75 + i * 0.1, 0.45)
+            )
+            heart_icons.append(heart)
+
+    def update_hearts(self):
+        full_hearts = round(self.health / 100 * 7)
+        for i, heart in enumerate(heart_icons):
+            heart.texture = (
+                'assets/ui/heart_full.png' if i < full_hearts else 'assets/ui/heart_empty.png'
+            )
 
     def take_damage(self, amount, source_position=None):
         if self.invincible:
-            return  # No damage during invincibility
+            return
 
         self.health -= amount
         print(f"Player took {amount} damage! Health: {self.health}")
@@ -67,7 +80,9 @@ class Player(Entity):
             self.knockback_force += direction * 5
 
         self.invincible = True
-        self.invincibility_timer = time.time()  # Start the timer
+        self.invincibility_timer = time.time()
+
+        self.update_hearts()  # Update heart UI
 
         if self.health <= 0:
             self.health = 0
@@ -81,11 +96,11 @@ class Player(Entity):
         self.collider = None
         self.dead = True
         self.rotation_x = 90
+        for heart in heart_icons:
+            heart.enabled = False
         if hasattr(self, 'on_death_callback'):
             self.on_death_callback()
         self.disable()
-        
-
 
     def restart_game():
-        application.quit()  # or reload the scene if you're using scenes
+        application.quit()
