@@ -2,11 +2,13 @@ from ursina import *
 from math import sin, cos, radians
 from random import uniform
 from ursina import lerp
+from panda3d.core import Fog
 
 app = Ursina()
 
 # === CONFIG ===
 target_eye_height = 1.8
+camera.fov = 90  # Try values between 60 - 120
 target_scale_y = 1.8
 normal_speed = 5
 sprint_speed = 10
@@ -47,21 +49,26 @@ pickup_distance = 2.0  # max distance to grab object
 bobbing_time = 0
 base_eye_height = 1.8
 
+# Add fog effect
+fog = Fog("SceneFog")  # This name string is required
+fog.setMode(Fog.MExponential)  # You can also use Fog.MLinear
+fog.setColor(0.3, 0.3, 0.3)  # spooky gray
+fog.setExpDensity(0.05)
+scene.setFog(fog)
 
 
-# ==== CROSSHAIR ====
-# crosshair = Entity(
-#     model='circle',
-#     scale=0.005,
-#     color=color.white,
-#     position=(0, 0, 0),
-#     parent=camera.ui
-# )
+crosshair = Entity(
+    model='circle',
+    scale=0.005,
+    color=color.white,
+    position=(0, 0, 0),
+    parent=camera.ui
+)
 
-# crosshair = Entity(parent=camera.ui, model='quad', scale=(0.002, 0.0002), color=color.white, position=(0, 0))
-# crosshair2 = Entity(parent=camera.ui, model='quad', scale=(0.0002, 0.002), color=color.white, position=(0, 0))
+crosshair = Entity(parent=camera.ui, model='quad', scale=(0.002, 0.0002), color=color.white, position=(0, 0))
+crosshair2 = Entity(parent=camera.ui, model='quad', scale=(0.0002, 0.002), color=color.white, position=(0, 0))
 
-crosshair = Entity(parent=camera.ui, model='quad', texture='crosshairg.png', scale=0.003)
+crosshair = Entity(parent=camera.ui, model='quad', texture='/assets/textures/crosshairg.png', scale=0.003)
 
 
 Sky()
@@ -186,7 +193,7 @@ def input(key):
                 nearest.world_position = player.world_position + Vec3(-0.3, 0, 1)
                 nearest.scale = 0.3
 
-    # Drop / Throw object
+    # Drop / Throw
     if key == 'q':
         thrown = None
 
@@ -201,45 +208,24 @@ def input(key):
             thrown.parent = scene
             thrown.scale = 0.5
 
-            start_pos = player.world_position + Vec3(0, 1.5, 0)
             forward = camera.forward.normalized()
+            start_pos = camera.world_position + forward * 1.5 + Vec3(0, 0, 0)
+            target_point = start_pos + forward * 5
 
-            # Raycast forward first
-            forward_hit = raycast(start_pos, forward, distance=15, ignore=[player], debug=True)
-
-            if forward_hit.hit:
-                target_point = forward_hit.point
-            else:
-                # Try downward ray from forward offset
-                mid = start_pos + forward * 4
-                down_hit = raycast(mid, Vec3(0, -1, 0), distance=20, ignore=[player], debug=True)
-
-                if down_hit.hit:
-                    target_point = down_hit.point
-                else:
-                    # Final fallback
-                    target_point = start_pos + forward * 4 + Vec3(0, -1, 0)
-
-            # Offset slightly to prevent merging/sticking
-            target_point += Vec3(0, 0.2, 0)
-            target_point += Vec3(random.uniform(-0.05, 0.05), 0, random.uniform(-0.05, 0.05))
+            # Add slight randomness
+            target_point += Vec3(uniform(-0.1, 0.1), 0.1, uniform(-0.1, 0.1))
 
             thrown.world_position = start_pos
-            thrown.gravity = 0
-            thrown.collider = None
+            thrown.collider = None  # temporarily disable collider during animation
 
-            def enable_gravity():
-                thrown.gravity = 1
+            def apply_physics():
                 thrown.collider = 'box'
+                thrown.gravity = 1  # optional, if you’ve defined gravity in your own update loop
+                thrown.velocity = Vec3(0, -0.1, 0)  # simulate falling if not using gravity system
 
+            # Animate throw
             thrown.animate_position(target_point, duration=0.35, curve=curve.out_circ)
-            invoke(enable_gravity, delay=0.35)
-
-
-
-
-
-
+            invoke(apply_physics, delay=0.35)
 
 class HoldableItem(Entity):
     def __init__(self, position=(0, 1, 0), model='cube', color=color.azure):
@@ -448,8 +434,6 @@ def update():
 
     # Final camera position
     camera.position = player.position + Vec3(x_bob, eye_height + y_bob, 0)
-
-
 
 
     # print("Terrain enabled:", ground.enabled, "visible:", ground.visible)
