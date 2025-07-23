@@ -2,6 +2,7 @@ from ursina import *
 from math import sin, cos, radians
 from random import uniform
 from ursina import lerp
+from panda3d.core import Fog
 
 app = Ursina()
 
@@ -9,6 +10,7 @@ app = Ursina()
 target_eye_height = 1.8
 target_scale_y = 1.8
 normal_speed = 5
+camera.fov = 90  # Try values between 60 - 120
 sprint_speed = 10
 sensitivity = 100  # Mouse sensitivity; adjust if unintended drift occurs
 jump_height = 6
@@ -42,27 +44,29 @@ is_crouching = False
 
 held_left = None
 held_right = None
-pickup_distance = 2.0  # max distance to grab object
+pickup_distance = 4.0  # max distance to grab object
 
 bobbing_time = 0
 base_eye_height = 1.8
 
+# Add fog effect
+fog = Fog("SceneFog")  # This name string is required
+fog.setMode(Fog.MExponential)  # You can also use Fog.MLinear
+fog.setColor(0.3, 0.3, 0.3)  # spooky gray
+fog.setExpDensity(0.05)
+scene.setFog(fog)
 
+crosshair = Entity(
+    model='circle',
+    scale=0.005,
+    color=color.white,
+    position=(0, 0, 0),
+    parent=camera.ui
+)
 
-# ==== CROSSHAIR ====
-# crosshair = Entity(
-#     model='circle',
-#     scale=0.005,
-#     color=color.white,
-#     position=(0, 0, 0),
-#     parent=camera.ui
-# )
-
-# crosshair = Entity(parent=camera.ui, model='quad', scale=(0.002, 0.0002), color=color.white, position=(0, 0))
-# crosshair2 = Entity(parent=camera.ui, model='quad', scale=(0.0002, 0.002), color=color.white, position=(0, 0))
-
-crosshair = Entity(parent=camera.ui, model='quad', texture='crosshairg.png', scale=0.003)
-
+crosshair = Entity(parent=camera.ui, model='quad', scale=(0.002, 0.0002), color=color.white, position=(0, 0))
+crosshair2 = Entity(parent=camera.ui, model='quad', scale=(0.0002, 0.002), color=color.white, position=(0, 0))
+crosshair = Entity(parent=camera.ui, model='quad', texture='/assets/textures/crosshairg.png', scale=0.003)
 
 Sky()
 
@@ -83,11 +87,6 @@ DirectionalLight(y=3, z=3, shadows=True)
 player = Entity(model='cube', scale_y=1.8, origin_y=-0.5, collider='box', position=(0, 10, 0))
 player.collider = BoxCollider(player, center=Vec3(0,1,0), size=Vec3(1,2,1))
 player.visible = False
-# player.model = 'assets/models/player.glb'
-
-# TEMP ENTITY
-# Entity(model='cube', color=color.red, position=(0, 0.5, 0), scale=0.5)
-
 # === POINTS TEXT ===
 points_text = Text(
     text=f'Points: {player_points}',
@@ -123,35 +122,6 @@ def spawn_points(num_points=5, area_size=40):
 
 spawn_points(num_points=100, area_size=500)
 
-# === DELAY FALL CHECK ===
-def enable_fall_check():
-    global fall_check_enabled
-    # fall_check_enabled = True
-
-# invoke(enable_fall_check, delay=1)  # Start checking for falling after 1 sec
-
-# === CITY STRUCTURES ===
-# def spawn_structures():
-#     # Define structure type, position, color, and scale
-#     structures = [
-#         ('school', Vec3(-10, 0, 10), color.blue, Vec3(4, 2, 4)),
-#         ('factory', Vec3(10, 0, 10), color.light_gray, Vec3(5, 3, 5)),
-#         ('building', Vec3(10, 0, -10), color.gray, Vec3(3, 4, 3)),
-#         ('hospital', Vec3(-10, 0, -10), color.red, Vec3(4, 3, 4)),
-#         ('park', Vec3(0, 0, 15), color.lime, Vec3(6, 1, 6)),
-#     ]
-#     for name, pos, col, scl in structures:
-#         Entity(
-#             model='cube',
-#             collider='box',
-#             position=pos + Vec3(0, scl.y / 2, 0),
-#             scale=scl,
-#             color=col,
-#             name=name
-#         )
-
-# spawn_structures()
-
 apartment = Entity(
     model='assets/models/apartment.glb',
     collider='box',
@@ -164,27 +134,20 @@ def input(key):
 
     # Pick up object
     if key == 'e':
-        nearest = None
-        nearest_dist = float('inf')
+        ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
 
-        for obj in scene.entities:
-            if hasattr(obj, 'is_holdable') and obj.is_holdable and obj.enabled:
-                dist = distance(player.position, obj.position)
-                if dist < pickup_distance and dist < nearest_dist:
-                    nearest = obj
-                    nearest_dist = dist
-
-        if nearest:
+        if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
+            item = ray.entity
             if not held_right:
-                held_right = nearest
-                nearest.parent = camera
-                nearest.world_position = player.world_position + Vec3(0.3, 0, 1)
-                nearest.scale = 0.3
+                held_right = item
+                item.parent = camera
+                item.world_position = player.world_position + Vec3(0.3, 0, 1)
+                item.scale = 0.3
             elif not held_left:
-                held_left = nearest
-                nearest.parent = camera
-                nearest.world_position = player.world_position + Vec3(-0.3, 0, 1)
-                nearest.scale = 0.3
+                held_left = item
+                item.parent = camera
+                item.world_position = player.world_position + Vec3(-0.3, 0, 1)
+                item.scale = 0.3
 
     # Drop / Throw object
     if key == 'q':
@@ -199,47 +162,13 @@ def input(key):
 
         if thrown:
             thrown.parent = scene
+            thrown.collider = 'box'
+            thrown.world_position = camera.world_position + camera.forward + Vec3(0, -0.2, 0)
             thrown.scale = 0.5
+            thrown.velocity = camera.forward * 10 + Vec3(0, 3, 0)  # Add upward arc
 
-            start_pos = player.world_position + Vec3(0, 1.5, 0)
-            forward = camera.forward.normalized()
-
-            # Raycast forward first
-            forward_hit = raycast(start_pos, forward, distance=15, ignore=[player], debug=True)
-
-            if forward_hit.hit:
-                target_point = forward_hit.point
-            else:
-                # Try downward ray from forward offset
-                mid = start_pos + forward * 4
-                down_hit = raycast(mid, Vec3(0, -1, 0), distance=20, ignore=[player], debug=True)
-
-                if down_hit.hit:
-                    target_point = down_hit.point
-                else:
-                    # Final fallback
-                    target_point = start_pos + forward * 4 + Vec3(0, -1, 0)
-
-            # Offset slightly to prevent merging/sticking
-            target_point += Vec3(0, 0.2, 0)
-            target_point += Vec3(random.uniform(-0.05, 0.05), 0, random.uniform(-0.05, 0.05))
-
-            thrown.world_position = start_pos
-            thrown.gravity = 0
-            thrown.collider = None
-
-            def enable_gravity():
-                thrown.gravity = 1
-                thrown.collider = 'box'
-
-            thrown.animate_position(target_point, duration=0.35, curve=curve.out_circ)
-            invoke(enable_gravity, delay=0.35)
-
-
-
-
-
-
+            # Add the item to a global list to update its motion manually
+            thrown.is_thrown = True
 
 class HoldableItem(Entity):
     def __init__(self, position=(0, 1, 0), model='cube', color=color.azure):
@@ -252,14 +181,11 @@ class HoldableItem(Entity):
         )
         self.is_holdable = True
 
-# Temporary holdable test objects
 holdable_items = []
 
 holdable_items.append(HoldableItem(position=(2, 1, 2), color=color.orange))
 holdable_items.append(HoldableItem(position=(-2, 1, -2), color=color.yellow))
 holdable_items.append(HoldableItem(position=(0, 1, 4), color=color.cyan))
-
-
 
 # === UPDATE ===
 def update():
@@ -325,38 +251,6 @@ def update():
     else:
         is_grounded = False
 
-    # === PERSPECTIVE CHANGE LOGIC ===
-
-    # === First-person view ===
-    # if is_first_person:
-    #     player.visible = False
-    #     if player.model != 'cube':
-    #         player.model = 'cube'
-    #         player.scale = Vec3(1, 10, 1)
-
-    #     camera.position = player.position + Vec3(0, eye_height, 0)
-    #     camera.rotation_x = pitch
-    #     camera.rotation_y = yaw
-    #     camera.rotation_z = 0
-
-    # # === Third-person view ===
-    # else:
-    #     player.visible = True
-    #     if player.model != 'assets/models/player.glb':
-    #         player.model = 'assets/models/char.obj'
-    #         player.scale = 0.005
-
-    #     # Camera offset (behind and above player)
-    #     behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
-    #     height = Vec3(0, 3, 0)
-    #     camera.position = player.position + behind + height
-    #     # Third-person camera placement and rotation
-    #     player.visible = True
-
-    #     if player.model != 'assets/models/player.glb':
-    #         player.model = 'assets/models/char.obj'
-    #         player.scale = 0.005
-        
         # Position camera behind and above the player
         behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
         height = Vec3(0, 2, 0)
@@ -421,8 +315,6 @@ def update():
         held_left.world_position = lerp(held_left.world_position, base_pos + bob, 10 * time.dt)
 
 
-
-
     # Highlight holdable under crosshair
     hovered_holdable = None
     ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
@@ -449,18 +341,18 @@ def update():
     # Final camera position
     camera.position = player.position + Vec3(x_bob, eye_height + y_bob, 0)
 
+    # === Update thrown item physics ===
+    for item in holdable_items:
+        if hasattr(item, 'is_thrown') and item.is_thrown:
+            if not hasattr(item, 'velocity'):
+                item.velocity = Vec3(0, 0, 0)
+            item.velocity.y -= gravity * time.dt  # gravity
+            item.position += item.velocity * time.dt
 
-
-
-    # print("Terrain enabled:", ground.enabled, "visible:", ground.visible)
-
-# REMOVED GAME OVER LOGIC
-
-    # # === Game Over on Fall ===
-    # if fall_check_enabled and player.y < -20:
-    #     trigger_game_over()
-
-# PRINT LOGS FOR POS CHANGE
-# print("Player Y:", player.y, "Camera Y:", camera.y)
+            # Check for ground collision
+            if item.y <= ground.y + 0.75:  # adjust as needed
+                item.y = ground.y + 0.75
+                item.velocity = Vec3(0, 0, 0)
+                item.is_thrown = False
 
 app.run()
