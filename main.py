@@ -30,7 +30,7 @@ for i in range(-25, 26, 5):
 target_eye_height = 1.8
 target_scale_y = 1.8
 normal_speed = 5
-camera.fov = 90
+camera.fov = 90  
 sprint_speed = 10
 sensitivity = 100
 jump_height = 6
@@ -76,10 +76,12 @@ scene.setFog(fog)
 
 crosshair = Entity(parent=camera.ui, model='circle', scale=(0.0125, 0.0125), color=color.white, position=(0, 0))
 
+
 hand_right = Entity(
     parent=camera,
     model='cube',
     color=color.rgb(255, 224, 189),
+
     scale=(0.15, 0.25, 0.15),
     position=(0.25, -0.4, 0.5),
     rotation=(20, -15, 10),
@@ -90,6 +92,7 @@ hand_left = Entity(
     parent=camera,
     model='cube',
     color=color.rgb(255, 224, 189),
+
     scale=(0.15, 0.25, 0.15),
     position=(-0.25, -0.4, 0.5),
     rotation=(20, 15, -10),
@@ -161,9 +164,15 @@ def input(key):
             if not held_right:
                 held_right = item
                 item.parent = camera
-                item.world_position = player.world_position + Vec3(0.3, -0.2, 1)
+                item.position = Vec3(0.675, -0.2, 1)  # local to camera
                 item.scale = 0.3
 
+
+                item.rotation = Vec3(0, 0, 0)  # Reset rotation
+                item.is_thrown = False
+
+    
+    # Offhand grabbing
     if key == 'f':
         ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
         if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
@@ -171,8 +180,12 @@ def input(key):
             if not held_left:
                 held_left = item
                 item.parent = camera
-                item.world_position = player.world_position + Vec3(-0.3, -0.2, 1)
+                item.position = Vec3(-0.675, -0.2, 1)
                 item.scale = 0.3
+
+                item.rotation = Vec3(0, 0, 0)
+                item.is_thrown = False
+
 
     if key == 'q':
         thrown = None
@@ -311,6 +324,7 @@ def update():
     camera.rotation_x = pitch
     camera.rotation_y = yaw
 
+
     # === First vs Third Person ===
     if is_first_person:
         camera.position = player.position + Vec3(0, eye_height, 0)
@@ -330,6 +344,7 @@ def update():
             player.scale = 0.005
 
     # === Point Pickup Logic ===
+
     for pickup in point_pickups[:]:
         if distance(player.position, pickup.position) < 1:
             player_points += pickup.value
@@ -344,6 +359,7 @@ def update():
     else:
         target_scale_y = stand_height
         target_eye_height = 1.8
+
 
     player.scale_y = lerp(player.scale_y, target_scale_y, 6 * time.dt)
     eye_height = lerp(eye_height, target_eye_height, 6 * time.dt)
@@ -371,6 +387,7 @@ def update():
 
     # === Camera and Hand Bobbing ===
     is_moving = held_keys['w'] or held_keys['a'] or held_keys['s'] or held_keys['d']
+
     if is_moving and is_grounded:
         bobbing_time += time.dt * 6
         y_bob = sin(bobbing_time) * 0.035
