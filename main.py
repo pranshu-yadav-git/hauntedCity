@@ -10,6 +10,7 @@ app = Ursina()
 target_eye_height = 1.8
 target_scale_y = 1.8
 normal_speed = 5
+crouch_speed = 3
 camera.fov = 90  # Try values between 60 - 120
 sprint_speed = 10
 sensitivity = 100  # Mouse sensitivity; adjust if unintended drift occurs
@@ -59,24 +60,23 @@ scene.setFog(fog)
 crosshair = Entity(parent=camera.ui, model='circle', scale=(0.0125, 0.0125), color=color.white, position=(0, 0))
 
 # === HAND ENTITIES (3D) ===
-# === Realistic Always-Visible Hands ===
 hand_right = Entity(
     parent=camera,
     model='cube',
-    color=color.rgb(255, 224, 189),  # skin tone
-    scale=(0.15, 0.25, 0.15),
-    position=(0.25, -0.4, 0.5),
-    rotation=(20, -15, 10),
+    color=color.rgb(255, 224, 189),
+    scale=(0.075, 0.2, 0.075),
+    position=(0.35, -0.20, 0.4),  # adjusted position
+    rotation=(10, 20, -10),
     enabled=True
 )
 
 hand_left = Entity(
     parent=camera,
     model='cube',
-    color=color.rgb(255, 224, 189),  # skin tone
-    scale=(0.15, 0.25, 0.15),
-    position=(-0.25, -0.4, 0.5),
-    rotation=(20, 15, -10),
+    color=color.rgb(255, 224, 189),
+    scale=(0.075, 0.2, 0.075),
+    position=(-0.35, -0.20, 0.4),  # adjusted position
+    rotation=(10, -20, 10),
     enabled=True
 )
 
@@ -144,27 +144,29 @@ def input(key):
     # Pick up object
     if key == 'e':
         ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
-
         if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
             item = ray.entity
             if not held_right:
                 held_right = item
                 item.parent = camera
-                item.world_position = player.world_position + Vec3(0.3, -0.2, 1)
+                item.position = Vec3(0.675, -0.2, 1)  # local to camera
                 item.scale = 0.3
+                item.rotation = Vec3(0, 0, 0)  # Reset rotation
+                item.is_thrown = False
+
     
     # Offhand grabbing
     if key == 'f':
         ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
-
         if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
             item = ray.entity
             if not held_left:
                 held_left = item
                 item.parent = camera
-                item.world_position = player.world_position + Vec3(-0.3, -0.2, 1)
+                item.position = Vec3(-0.675, -0.2, 1)
                 item.scale = 0.3
-
+                item.rotation = Vec3(0, 0, 0)
+                item.is_thrown = False
 
     # Drop / Throw object
     if key == 'q':
@@ -278,25 +280,6 @@ def update():
         camera.rotation_z = 0
 
 
-    # === MODEL CHANGE LOGIC ===
-    if is_first_person:
-        camera.position = player.position + Vec3(0, eye_height, 0)
-        camera.rotation_x = pitch
-        camera.rotation_y = yaw
-        player.visible = False
-        if player.model != 'cube':
-            player.model = 'cube'
-            player.scale = Vec3(1, 1.8, 1)  # Default cube size
-    else:
-        offset = Vec3(sin(radians(yaw)), 0.5, cos(radians(yaw))) * -6
-        camera.position = player.position + offset + Vec3(0, 2, 0)
-        camera.look_at(player.position + Vec3(0, 1, 0))
-        player.visible = True
-        if player.model != 'assets/models/player.glb':
-            player.model = 'assets/models/char.obj'
-            player.scale = 0.005  # <-- Set this to scale the model down properly
-
-
     # === Point Pickup Collection ===
     for pickup in point_pickups[:]:
         if distance(player.position, pickup.position) < 1:
@@ -315,20 +298,9 @@ def update():
         target_scale_y = stand_height
         target_eye_height = 1.8
 
-    
     # Interpolate current values towards target values (smoothing)
     player.scale_y = lerp(player.scale_y, target_scale_y, 6 * time.dt)
     eye_height = lerp(eye_height, target_eye_height, 6 * time.dt)
-
-    if held_right:
-        base_pos = camera.world_position + camera.forward + camera.right * 0.4 + Vec3(0, -0.2, 0)
-        bob = Vec3(x_bob * 0.5, y_bob * 0.7, 0)  # match camera bob gently
-        held_right.world_position = lerp(held_right.world_position, base_pos + bob, 10 * time.dt)
-
-    if held_left:
-        base_pos = camera.world_position + camera.forward - camera.right * 0.4 + Vec3(0, -0.2, 0)
-        bob = Vec3(x_bob * 0.5, y_bob * 0.7, 0)
-        held_left.world_position = lerp(held_left.world_position, base_pos + bob, 10 * time.dt)
 
 
     # Highlight holdable under crosshair
@@ -345,25 +317,8 @@ def update():
 
     is_moving = held_keys['w'] or held_keys['a'] or held_keys['s'] or held_keys['d']
 
-    if is_moving and is_grounded:
-        bobbing_time += time.dt * 6  # slower for smoothness
-        y_bob = math.sin(bobbing_time) * 0.035
-        x_bob = math.sin(bobbing_time * 2) * 0.02
-    else:
-        bobbing_time = 0
-        y_bob = 0
-        x_bob = 0
-
-    # Final camera position
-    camera.position = player.position + Vec3(x_bob, eye_height + y_bob, 0)
-
-    # Hand sway/bob
-    bob_speed = 6
-    x_bob = sin(time.time() * bob_speed) * 0.01
-    y_bob = cos(time.time() * bob_speed * 2) * 0.01
-
-    hand_right.position = Vec3(0.25 + x_bob, -0.4 + y_bob, 0.5)
-    hand_left.position = Vec3(-0.25 - x_bob, -0.4 + y_bob, 0.5)
+    hand_right.position = Vec3(0.35, -0.20, 0.4)
+    hand_left.position = Vec3(-0.35, -0.20, 0.4)
 
     # === Update thrown item physics ===
     for item in holdable_items:
