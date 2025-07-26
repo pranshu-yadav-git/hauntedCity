@@ -43,6 +43,14 @@ is_first_person = True
 pitch, yaw = 0, 0
 max_pitch = 89
 
+coord_text = Text(
+    text='Coordinates: 0, 0, 0',
+    position=(-0.85, 0.45),  # top-left corner
+    origin=(0, 0),
+    scale=0.9,
+    color=color.white
+)
+
 
 crouch_height = 0.9
 stand_height = 1.8
@@ -61,8 +69,6 @@ fog.setMode(Fog.MExponential)
 fog.setColor(0.3, 0.3, 0.3) 
 fog.setExpDensity(0.05)
 scene.setFog(fog)
-
-trash_items = []  # Store trash references for later use (e.g., scoring)
 
 crosshair = Entity(parent=camera.ui, model='circle', scale=(0.0125, 0.0125), color=color.white, position=(0, 0))
 
@@ -180,6 +186,16 @@ road_right = Entity(
     position=(131.5, 0.1, -20),
     rotation=(0, 90, 0)
 )
+
+
+clinic = Entity(
+    model='assets/models/clinic.glb',
+    collider='box',
+    scale=0.0175,
+    position=(105, -0.5, 100),
+    rotation=(0,0,0)
+)
+
 
 house1 = Entity(
     model='assets/models/house.glb',
@@ -341,6 +357,34 @@ class HoldableItem(Entity):
             collider='box'
         )
         self.is_holdable = True
+
+class Pill(Entity):
+    def __init__(self, position):
+        super().__init__(
+            model='assets/models/pills.glb',
+            position=position,
+            scale=6,
+            collider='box'
+        )
+        self.is_holdable = True 
+
+# def spawn_pills_around_hospital(count=10, center=Vec3(105, 0.1, 100), radius=10):
+#     for _ in range(count):
+#         x_offset = uniform(-radius, radius)
+#         z_offset = uniform(-radius, radius)
+#         pos = center + Vec3(x_offset, 0.5, z_offset)
+#         Pill(position=pos)
+
+# spawn_pills_around_hospital()
+
+def spawn_random_pills(count=50, area_size=300):
+    for _ in range(count):
+        x = uniform(-area_size, area_size)
+        z = uniform(-area_size, area_size)
+        y = 0.1  # slightly above ground
+        Pill(position=Vec3(x, y, z))
+
+spawn_random_pills()
 
 
 def spawn_trash(n=5):
@@ -539,5 +583,11 @@ def update():
 
             player_points += 10
             points_text.text = f"Points: {player_points}"
-
+    coord_text.text = f'Coordinates: {round(player.x,1)}, {round(player.y,1)}, {round(player.z,1)}'
+    if hasattr(thrown, 'is_holdable'):
+                    dist = distance(thrown.position, clinic.position)
+                    if dist < 30:  # within range
+                        global player_points
+                        player_points += 10
+                        points_text.text = f'Points: {player_points}'
 app.run()
