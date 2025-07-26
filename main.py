@@ -3,47 +3,28 @@ from math import sin, cos, radians
 from random import uniform
 from ursina import lerp
 from panda3d.core import Fog
-from ursina import Audio
-
-ghost_sound = Audio('assets/sounds/ghost.wav', loop=True, autoplay=True)
 
 app = Ursina()
-
-road = Entity(
-    model='plane',
-    texture='assets/textures/asphalt.jpg',
-    scale=(10, 1, 50),
-    position=(0, 0.76, 5),
-    color=color.white,
-    collider='box'
-)
-
-for i in range(-25, 26, 5):
-    Entity(
-        model='cube',
-        scale=(0.2, 0.01, 1.5),
-        color=color.white,
-        position=(0, 0.01, i)
-    )
 
 # === CONFIG ===
 target_eye_height = 1.8
 target_scale_y = 1.8
-normal_speed = 5
-camera.fov = 90  
-sprint_speed = 10
-sensitivity = 100
+normal_speed = 8
+crouch_speed = 3
+camera.fov = 90  # Try values between 60 - 120
+sprint_speed = 20
+sensitivity = 100  # Mouse sensitivity; adjust if unintended drift occurs
 jump_height = 6
 gravity = 20
 max_pitch = 89
-pitch = -30
+pitch = -30  # Initial camera pitch to view ground on first frame
 yaw = 0
 eye_height = 1.8
 player_points = 0
 velocity_y = 0
 is_grounded = False
 game_over = False
-fall_check_enabled = False
+fall_check_enabled = False  # Delay fall detection
 # ==============
 
 window.title = "Haunted City - FPS"
@@ -52,9 +33,11 @@ window.color = color.black
 window.fps_counter.enabled = True
 window.exit_button.visible = False
 
+
 is_first_person = True
 pitch, yaw = 0, 0
 max_pitch = 89
+
 
 crouch_height = 0.9
 stand_height = 1.8
@@ -62,29 +45,28 @@ is_crouching = False
 
 held_left = None
 held_right = None
-pickup_distance = 4.0
+pickup_distance = 4.0  # max distance to grab object
 
 bobbing_time = 0.1
 base_eye_height = 1.8
 
 # Add fog effect
-fog = Fog("SceneFog")
-fog.setMode(Fog.MExponential)
-fog.setColor(0.3, 0.3, 0.3)
+fog = Fog("SceneFog")  
+fog.setMode(Fog.MExponential) 
+fog.setColor(0.3, 0.3, 0.3) 
 fog.setExpDensity(0.05)
 scene.setFog(fog)
 
 crosshair = Entity(parent=camera.ui, model='circle', scale=(0.0125, 0.0125), color=color.white, position=(0, 0))
 
-
+# === HAND ENTITIES (3D) ===
 hand_right = Entity(
     parent=camera,
     model='cube',
     color=color.rgb(255, 224, 189),
-
-    scale=(0.15, 0.25, 0.15),
-    position=(0.25, -0.4, 0.5),
-    rotation=(20, -15, 10),
+    scale=(0.075, 0.2, 0.075),
+    position=(0.35, -0.20, 0.4),  # adjusted position
+    rotation=(10, 20, -10),
     enabled=True
 )
 
@@ -92,28 +74,29 @@ hand_left = Entity(
     parent=camera,
     model='cube',
     color=color.rgb(255, 224, 189),
-
-    scale=(0.15, 0.25, 0.15),
-    position=(-0.25, -0.4, 0.5),
-    rotation=(20, 15, -10),
+    scale=(0.075, 0.2, 0.075),
+    position=(-0.35, -0.20, 0.4),  # adjusted position
+    rotation=(10, -20, 10),
     enabled=True
 )
 
 Sky()
 
+# === TERRAIN ===
 ground = Entity(
     model='plane',
-    texture='assets/textures/grass2.png',
-    scale=(100, 1, 100),
+    scale=(9980, 1, 9981),
+    texture_scale=(1690, 2160),
+    collider='box',
     position=(0, 0, 0),
-    color=color.white,
-    collider='box'
+    texture="/assets/textures/grass.png"
 )
 
 DirectionalLight(y=3, z=3, shadows=True)
 
+# === PLAYER ===
 player = Entity(model='cube', scale_y=1.8, origin_y=-0.5, collider='box', position=(0, 10, 0))
-player.collider = BoxCollider(player, center=Vec3(0, 1, 0), size=Vec3(1, 2, 1))
+player.collider = BoxCollider(player, center=Vec3(0,1,0), size=Vec3(1,2,1))
 player.visible = False
 
 points_text = Text(
@@ -124,6 +107,7 @@ points_text = Text(
     color=color.red
 )
 
+# === POINT PICKUPS ===
 point_pickups = []
 
 class PointPickup(Entity):
@@ -142,21 +126,58 @@ def spawn_points(num_points=5, area_size=40):
     for _ in range(num_points):
         x = uniform(-area_size, area_size)
         z = uniform(-area_size, area_size)
-        y = 0.5
+        y = 0.5  
         PointPickup(position=Vec3(x, y, z))
 
-spawn_points(num_points=100, area_size=500)
-
-apartment = Entity(
-    model='assets/models/apartment.glb',
+# spawn_points(num_points=100)
+"""
+road_segment = Entity(
+    model='plane',
+    scale=(40, 1, 10),
+    texture="/assets/textures/road.jpg",
+    texture_scale=(2, 2),
     collider='box',
-    scale=0.05,
-    position=(100, -0.9, 0)
+    position=(0,0.1,0),
+    rotation=(0, 0, 0)
+)
+"""
+# create_road_network(rows=10, cols=10, spacing=20)
+
+
+house1 = Entity(
+    model='assets/models/house.glb',
+    collider='box',
+    scale=0.15,
+    position=(50, 0.1, 0)
+)
+
+house2 = Entity(
+    model='assets/models/lp_japnes_house.glb',
+    collider='box',
+    scale=3.8,
+    position=(56, -1.3, -25)
+)
+
+school = Entity(
+    model='assets/models/school.glb',
+    collider='box',
+    scale=1.5,
+    position=(85, 0, 20),
+    rotation=(0,-90,0)
+)
+
+factory1 = Entity(
+    model='assets/models/factory.glb',
+    collider='box',
+    scale=1,
+    position=(85, 0, -20),
+    rotation=(0,-90,0)
 )
 
 def input(key):
     global held_left, held_right
 
+    # Pick up object
     if key == 'e':
         ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
         if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
@@ -166,8 +187,6 @@ def input(key):
                 item.parent = camera
                 item.position = Vec3(0.675, -0.2, 1)  # local to camera
                 item.scale = 0.3
-
-
                 item.rotation = Vec3(0, 0, 0)  # Reset rotation
                 item.is_thrown = False
 
@@ -182,13 +201,13 @@ def input(key):
                 item.parent = camera
                 item.position = Vec3(-0.675, -0.2, 1)
                 item.scale = 0.3
-
                 item.rotation = Vec3(0, 0, 0)
                 item.is_thrown = False
 
-
+    # Drop / Throw object
     if key == 'q':
         thrown = None
+
         if held_right:
             thrown = held_right
             held_right = None
@@ -201,8 +220,8 @@ def input(key):
             thrown.collider = 'box'
             thrown.world_position = camera.world_position + camera.forward + Vec3(0, -0.2, 0)
             thrown.scale = 0.5
-            thrown.velocity = camera.forward * 10 + Vec3(0, 4, 0)
-            thrown.angular_velocity = Vec3(uniform(-180, 180), uniform(-180, 180), uniform(-180, 180))
+            thrown.velocity = camera.forward * 10 + Vec3(0, 4, 0)  # Throw arc
+            thrown.angular_velocity = Vec3(uniform(-180, 180), uniform(-180, 180), uniform(-180, 180))  # Random spin
             thrown.is_thrown = True
 
 class HoldableItem(Entity):
@@ -218,57 +237,13 @@ class HoldableItem(Entity):
 
 holdable_items = []
 
-holdable_items.append(HoldableItem(position=(2, 0.75, 2), color=color.orange))
-holdable_items.append(HoldableItem(position=(-2, 0.75, -2), color=color.yellow))
-holdable_items.append(HoldableItem(position=(0, 0.75, 4), color=color.cyan))
+holdable_items.append(HoldableItem(position=(2, 0.5, 2), color=color.orange))
+holdable_items.append(HoldableItem(position=(-2, 0.5, -2), color=color.yellow))
+holdable_items.append(HoldableItem(position=(0, 0.5, 4), color=color.cyan))
 
-...
-
-# === Input Handling ===
-def input(key):
-    global held_left, held_right
-
-    if key == 'e':
-        ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
-        if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
-            item = ray.entity
-            if not held_right:
-                held_right = item
-                item.parent = camera
-                item.world_position = player.world_position + Vec3(0.3, -0.2, 1)
-                item.scale = 0.3
-
-    if key == 'f':
-        ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
-        if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
-            item = ray.entity
-            if not held_left:
-                held_left = item
-                item.parent = camera
-                item.world_position = player.world_position + Vec3(-0.3, -0.2, 1)
-                item.scale = 0.3
-
-    if key == 'q':
-        thrown = None
-        if held_right:
-            thrown = held_right
-            held_right = None
-        elif held_left:
-            thrown = held_left
-            held_left = None
-
-        if thrown:
-            thrown.parent = scene
-            thrown.collider = 'box'
-            thrown.world_position = camera.world_position + camera.forward + Vec3(0, -0.2, 0)
-            thrown.scale = 0.5
-            thrown.velocity = camera.forward * 10 + Vec3(0, 4, 0)
-            thrown.angular_velocity = Vec3(uniform(-180, 180), uniform(-180, 180), uniform(-180, 180))
-            thrown.is_thrown = True
-
-# === Main Game Loop ===
+# === UPDATE ===
 def update():
-    global pitch, yaw, velocity_y, is_grounded, player_points, game_over, eye_height, target_eye_height, target_scale_y, bobbing_time, x_bob, y_bob, is_crouching
+    global pitch, yaw, velocity_y, is_grounded, player_points, game_over, eye_height, target_eye_height, target_scale_y, bobbing_time, x_bob, y_bob
 
     if game_over:
         return
@@ -284,6 +259,12 @@ def update():
         player.rotation_y = yaw
         camera.rotation_y = yaw
 
+    if mouse.locked:
+        yaw += mouse.velocity[0] * sensitivity
+        pitch -= mouse.velocity[1] * sensitivity
+        pitch = clamp(pitch, -max_pitch, max_pitch)
+
+    # Reset roll and update camera position every frame
     camera.rotation_z = 0
     camera.position = player.position + Vec3(0, eye_height, 0)
 
@@ -296,20 +277,26 @@ def update():
     if held_keys['s']: move -= forward
     if held_keys['a']: move -= right
     if held_keys['d']: move += right
+
     if move != Vec3(0, 0, 0):
         move = move.normalized()
 
     move_speed = sprint_speed if held_keys['shift'] and held_keys['w'] else normal_speed
     player.position += move * time.dt * move_speed
 
-    # === Gravity and Jumping ===
+    # Calculate ground surface height
     surface_y = ground.position.y + ground.scale_y / 2
+
+    # Handle jumping
     if is_grounded and held_keys['space']:
-        velocity_y = jump_height
+        velocity_y += jump_height
     else:
         velocity_y -= gravity * time.dt
+
+    # Apply vertical movement
     player.y += velocity_y * time.dt
 
+    # Simple ground collision
     if player.y < surface_y:
         player.y = surface_y
         velocity_y = 0
@@ -317,34 +304,8 @@ def update():
     else:
         is_grounded = False
 
-    # === Third-Person Camera Position ===
-    behind = Vec3(sin(radians(yaw)), 0, cos(radians(yaw))) * -6
-    height = Vec3(0, 2, 0)
-    camera.position = player.position + behind + height
-    camera.rotation_x = pitch
-    camera.rotation_y = yaw
 
-
-    # === First vs Third Person ===
-    if is_first_person:
-        camera.position = player.position + Vec3(0, eye_height, 0)
-        camera.rotation_x = pitch
-        camera.rotation_y = yaw
-        player.visible = False
-        if player.model != 'cube':
-            player.model = 'cube'
-            player.scale = Vec3(1, 1.8, 1)
-    else:
-        offset = Vec3(sin(radians(yaw)), 0.5, cos(radians(yaw))) * -6
-        camera.position = player.position + offset + Vec3(0, 2, 0)
-        camera.look_at(player.position + Vec3(0, 1, 0))
-        player.visible = True
-        if player.model != 'assets/models/player.glb':
-            player.model = 'assets/models/char.obj'
-            player.scale = 0.005
-
-    # === Point Pickup Logic ===
-
+    # === Point Pickup Collection ===
     for pickup in point_pickups[:]:
         if distance(player.position, pickup.position) < 1:
             player_points += pickup.value
@@ -352,89 +313,83 @@ def update():
             pickup.disable()
             point_pickups.remove(pickup)
 
-    # === Crouching ===
+    global is_crouching
+
+    # Smooth crouch control
     if held_keys['left control']:
         target_scale_y = crouch_height
         target_eye_height = 0.9
-    else:
+    else: 
         target_scale_y = stand_height
         target_eye_height = 1.8
 
-
+    # Interpolate current values towards target values (smoothing)
     player.scale_y = lerp(player.scale_y, target_scale_y, 6 * time.dt)
     eye_height = lerp(eye_height, target_eye_height, 6 * time.dt)
 
-    # === Held Item Bobbing ===
-    if held_right:
-        base_pos = camera.world_position + camera.forward + camera.right * 0.4 + Vec3(0, -0.2, 0)
-        bob = Vec3(x_bob * 0.5, y_bob * 0.7, 0)
-        held_right.world_position = lerp(held_right.world_position, base_pos + bob, 10 * time.dt)
 
-    if held_left:
-        base_pos = camera.world_position + camera.forward - camera.right * 0.4 + Vec3(0, -0.2, 0)
-        bob = Vec3(x_bob * 0.5, y_bob * 0.7, 0)
-        held_left.world_position = lerp(held_left.world_position, base_pos + bob, 10 * time.dt)
-
-    # === Highlight Holdables ===
+    # Highlight holdable under crosshair
     hovered_holdable = None
     ray = raycast(camera.world_position, camera.forward, distance=pickup_distance, ignore=(player,))
+
     if ray.hit and hasattr(ray.entity, 'is_holdable') and ray.entity.is_holdable:
         hovered_holdable = ray.entity
 
+    # Add/remove outline effect
     for e in scene.entities:
         if hasattr(e, 'is_holdable'):
             e.highlight_color = color.lime if e == hovered_holdable else color.clear
 
-    # === Camera and Hand Bobbing ===
     is_moving = held_keys['w'] or held_keys['a'] or held_keys['s'] or held_keys['d']
 
-    if is_moving and is_grounded:
-        bobbing_time += time.dt * 6
-        y_bob = sin(bobbing_time) * 0.035
-        x_bob = sin(bobbing_time * 2) * 0.02
-    else:
-        bobbing_time = 0
-        y_bob = 0
-        x_bob = 0
+    hand_right.position = Vec3(0.35, -0.20, 0.4)
+    hand_left.position = Vec3(-0.35, -0.20, 0.4)
 
-    camera.position = player.position + Vec3(x_bob, eye_height + y_bob, 0)
-
-    bob_speed = 6
-    x_bob = sin(time.time() * bob_speed) * 0.01
-    y_bob = cos(time.time() * bob_speed * 2) * 0.01
-    hand_right.position = Vec3(0.25 + x_bob, -0.4 + y_bob, 0.5)
-    hand_left.position = Vec3(-0.25 - x_bob, -0.4 + y_bob, 0.5)
-
-    # === Thrown Items Physics ===
+    # === Update thrown item physics ===
     for item in holdable_items:
         if hasattr(item, 'is_thrown') and item.is_thrown:
+
+            # === Initialize if not present ===
             if not hasattr(item, 'velocity'):
                 item.velocity = Vec3(0, 0, 0)
             if not hasattr(item, 'angular_velocity'):
                 item.angular_velocity = Vec3(0, 0, 0)
 
+            # === Apply gravity ===
             item.velocity.y -= gravity * time.dt
             item.position += item.velocity * time.dt
+
+            # === Apply spin ===
             item.rotation_x += item.angular_velocity.x * time.dt
             item.rotation_y += item.angular_velocity.y * time.dt
             item.rotation_z += item.angular_velocity.z * time.dt
 
-            ground_y = ground.y + 0.75
+            # === Collision with ground ===
+            ground_y = ground.y + 0.5
             if item.y <= ground_y:
                 item.y = ground_y
                 item.velocity = Vec3(0, 0, 0)
+
+                # Slowly reduce spin (angular drag)
                 item.angular_velocity *= 0.8
+
+                # When spin slows down, begin upright settle
                 if item.angular_velocity.length() < 1:
                     if not hasattr(item, 'upright_timer'):
                         item.upright_timer = 0
+
                     item.upright_timer += time.dt
+
+                    # Compute target rotation that keeps Y but sets X/Z upright
                     target_rot = Vec3(0, item.rotation.y, 0)
+
+                    # Lerp rotation toward upright (preserving Y)
                     item.rotation = lerp(item.rotation, target_rot, 6 * time.dt)
+
+                    # After ~0.5s stop completely
                     if item.upright_timer > 0.5:
                         item.rotation = target_rot
                         item.angular_velocity = Vec3(0, 0, 0)
                         item.is_thrown = False
                         del item.upright_timer
-
-# === Run App ===
 app.run()
